@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PancakeWaffles.Parsing
 {
-	struct Lexeme
+	class Lexeme
 	{
 		public PartOfSpeechType Type;
 		public string Value;

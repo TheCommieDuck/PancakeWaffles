@@ -79,13 +79,15 @@ namespace PancakeWaffles.Parsing
 
 		public Parser()
 		{
-			string actor = "(Actor )?";
+			//plan for parsing - register a list of rules (e.g. verb, verb object)
+			string actor = "^(Actor )?";
 			string verb = "(Verb)";
 			string prep = "( Preposition)?";
 			string innerNoun = "(?<innerNounPhrase>(Determiner )?((Adjective )*(Pronoun|Actor|Noun)))";
-			string nounPhrase = "( (?<nounPhrase>"+innerNoun+"( Preposition "+innerNoun+")))?";
-			string conjuction = "( Conjunction \\k<nounPhrase>)*";
+			string nounPhrase = "( (?<nounPhrase>"+innerNoun+"( Preposition "+innerNoun+")?))?";
+			string conjuction = "( Conjunction \\k<innerNounPhrase>)*$";
 
+			//[Actor] Verb [Preposition] [([Determiner] [Adjective]* Pronoun/Actor/Noun)] [Preposition nounphrase] [conjunction nounphrase]
 			commandPatterns.Add(actor+verb+prep+nounPhrase+conjuction);
 		}
 
@@ -100,16 +102,14 @@ namespace PancakeWaffles.Parsing
 				Console.WriteLine("Invalid Input");
 				return null;
 			}
-			else
-			{
-				tokens.ForEach(c => Console.WriteLine(c));
-			}
 
-			Regex regex = new Regex(commandPatterns.Aggregate("^", (built, pattern) => String.Join("|", built+"$", "^"+pattern), v => v+"$"));
+			Regex regex = new Regex(commandPatterns.Aggregate((built, pattern) => String.Join("|", built+"$", "^"+pattern)));
+
 			foreach(List<Lexeme> command in tokens)
 			{
 				//match lexemes with pattern matching
 				string builtCommand = command.Aggregate("", (built, lex) => built + lex.Type.ToString() + " ").Trim();
+				//don't care if they don't match up entirely - e.g. allow throw tasty yellow brick for bob
 				Match match = regex.Match(builtCommand);
 				if(!match.Success)
 				{
@@ -117,54 +117,36 @@ namespace PancakeWaffles.Parsing
 					//we didn't recognise that structure..
 					return null;
 				}
+
+				//then have a sanity check afterwards to see whether it's random words put together
+				//everything has a verb, we know that for sure.
+				Verb verb = Verbs[command.First(l => l.Type == PartOfSpeechType.Verb).Value];
+
+				//if we have no actor, then the actor is the player
+				//TODO
+				string actor = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Actor).Value;
+
+
+				Lexeme prepLex = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Preposition);
+				string prep = prepLex == null ? prepLex.Value : NoPreposition;
+
+				if(!verb.Prepositions.Contains(prep))
+				{
+					//nonmatching preposition
+					Terminal.WriteLine("Prep doesn't match");
+					return null;
+				}
+				
+				//so if we have a preposition, then it's going to be verb prep, verb prep object, or verb object prep object
+
 			}
 			
-			//plan for parsing - register a list of rules (e.g. verb, verb object)
 			
-			//don't care if they don't match up entirely - e.g. allow throw tasty yellow brick for bob
-			//then have a sanity check afterwards to see whether it's random words put together
+			
+			
+			
 
-			/*if(tokens == null)
-			{
-				return null;
-			}
-
-			//now consider every word for terminators to break into multiple commands. remove empty lists (e.g. 'go west.' gives 2 lists)
-			List<List<string>> commands = SplitCommands(tokens);
-
-			foreach(List<string> command in commands)
-			{
-				//delete trailing conjunctions ('and then')
-				while (Conjunctions.Contains(command.LastOrDefault()))
-					command.RemoveAt(command.Count - 1);
-				command.RemoveAll(s => s == "");
-				//first, check for invalid inputs
-				foreach(string token in command)
-				{
-					if(!IsVocabulary(token))
-					{
-						//todo: invalid input found
-						return null;
-					}
-				}
-				//format is: [actor] verb [direct objects] [preposition] [indirect objects].
-				//find a verb and save position. then save the first preposition
-				string verb = command.FirstOrDefault(w => Verbs.ContainsKey(w));
-				if (verb == null)
-					return null; //invalid verb found, todo
-
-				int verbLocation = command.IndexOf(verb);
-
-				//now we have a verb, we find the first preposition
-				string preposition = command.Skip(verbLocation+1).FirstOrDefault(w => Prepositions.Contains(w));
-				int prepositionLocation = command.IndexOf(preposition);
-
-				if (preposition == null)
-				{
-					preposition = NoPreposition;
-					prepositionLocation = command.Count;
-				}
-
+			/*
 				Verb verbObject = Verbs[verb];
 				if(!verbObject.Prepositions.Contains(preposition))
 				{

@@ -1,0 +1,25 @@
+﻿COMMAND = VERB | VERB OBJECT | VERB PREPOSITION | VERB PREPOSITION OBJECT | VERB OBJECT PREPOSITION OBJECT | DIRECTION | ACTOR COMMAND
+VERB = take | put | throw
+OBJECT = NOUN | ADJECTIVE NOUN | ARTICLE NOUN | ARTICLE ADJECTIVE NOUN | OBJECT CONJUCTION OBJECT | PRONOUN
+NOUN = brick | door | keys | DIRECTION | ACTOR
+PRONOUN = him | her | it | them
+ARTICLE = the | a | an | QUANTIFIER
+QUANTIFIER = all
+ADJECTIVE = red | blue
+PREPOSITION = with | on | under | at
+FOLLOW = then | . | ;
+DIRECTION = north | south | east
+CONJUCTION = , | and
+ACTOR = bill | bob
+
+throw
+look under -
+throw brick
+throw brick at door - 
+north - 
+bob, throw brick - 
+take red brick -
+take the brick -
+take the red brick
+take the red brick and the blue brick
+take him

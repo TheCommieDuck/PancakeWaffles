@@ -10,6 +10,7 @@ namespace PancakeWaffles.Parsing
 	{
 		Verb,
 		Noun,
+		Actor,
 		Pronoun,
 		Conjunction,
 		Determiner,
