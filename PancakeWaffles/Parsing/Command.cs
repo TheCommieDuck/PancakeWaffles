@@ -16,5 +16,13 @@ namespace PancakeWaffles.Parsing
 		public List<NounPhrase> IndirectObjects { get; set; }
 
 		public string Preposition { get; set; }
+
+        public Command(Verb verb, string prep=Parser.NoPreposition)
+        {
+            Verb = verb;
+            Preposition = prep;
+            DirectObjects = new List<NounPhrase>();
+            IndirectObjects = new List<NounPhrase>();
+        }
 	}
 }

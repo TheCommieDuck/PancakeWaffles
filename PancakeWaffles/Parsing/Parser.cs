@@ -2,10 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using PancakeWaffles.Verbs;
-using PancakeWaffles.Things;
 using System.Text.RegularExpressions;
+using PancakeWaffles.Verbs;
 
 namespace PancakeWaffles.Parsing
 {
@@ -77,6 +75,57 @@ namespace PancakeWaffles.Parsing
 				return PartOfSpeechType.Error;
 		}
 
+
+        public List<List<Lexeme>> TokeniseInput(string input)
+        {
+            StringBuilder newInput = new StringBuilder();
+            List<string> words = new List<string>();
+            List<List<Lexeme>> output = new List<List<Lexeme>>();
+
+            //first, split away the punctuation (,, ., etc)
+            foreach (char symbol in input)
+                newInput.Append(char.IsPunctuation(symbol) ? (" " + symbol + " ") : new string(new[] { symbol }));
+
+            words = newInput.ToString().Split(' ').Select(t => t.ToLower()).ToList();
+
+            List<List<string>> commands = SplitCommands(words, CommandBreaks);
+
+            foreach (List<string> singleCommand in commands)
+            {
+
+                while (Conjunctions.Contains(singleCommand.Last()) || singleCommand.Last() == "")
+                    singleCommand.RemoveAt(singleCommand.Count - 1);
+                List<Lexeme> singleCommandOutput = new List<Lexeme>();
+                List<string> originalInput = new List<string>(singleCommand);
+
+                while (singleCommand.Count > 0)
+                {
+                    List<string> consider = new List<string>(singleCommand);
+
+                    while (consider.Count > 0)
+                    {
+                        string joinedConsider = String.Join(" ", consider).Trim();
+                        //if it's a valid token, then add it to our output
+                        if (IsVocabulary(joinedConsider))
+                        {
+                            singleCommandOutput.Add(new Lexeme(joinedConsider, GetPartOfSpeech(joinedConsider)));
+                            singleCommand.RemoveRange(0, consider.Count);
+                            break;
+                        }
+                        consider.RemoveAt(consider.Count - 1);
+                    }
+
+                    //if our string for consideration is empty, then it was invalid input
+                    if (consider.Count == 0)
+                    {
+                        return null;
+                    }
+                }
+                output.Add(singleCommandOutput);
+            }
+            return output;
+        }
+
 		public Parser()
 		{
 			//plan for parsing - register a list of rules (e.g. verb, verb object)
@@ -120,15 +169,16 @@ namespace PancakeWaffles.Parsing
 
 				//then have a sanity check afterwards to see whether it's random words put together
 				//everything has a verb, we know that for sure.
-				Verb verb = Verbs[command.First(l => l.Type == PartOfSpeechType.Verb).Value];
+                Lexeme verbLex = command.First(l => l.Type == PartOfSpeechType.Verb);
+				Verb verb = Verbs[verbLex.Value];
 
 				//if we have no actor, then the actor is the player
 				//TODO
-				string actor = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Actor).Value;
-
+				Lexeme actorLex = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Actor);
+                string actor = (actorLex != null ? actorLex.Value : "player_placeholder");
 
 				Lexeme prepLex = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Preposition);
-				string prep = prepLex == null ? prepLex.Value : NoPreposition;
+				string prep = (prepLex != null ? prepLex.Value : NoPreposition);
 
 				if(!verb.Prepositions.Contains(prep))
 				{
@@ -138,135 +188,77 @@ namespace PancakeWaffles.Parsing
 				}
 				
 				//so if we have a preposition, then it's going to be verb prep, verb prep object, or verb object prep object
+                //verb object - only dobj
+                //verb prep object - no dobj, only iobj - which are actually dobj
+                //verb object prep object - dobj, iobj
+                IEnumerable<Lexeme> directObjects = command.Skip(command.IndexOf(verbLex) + 1).TakeWhile(l => !l.Equals(prepLex));
+                IEnumerable<Lexeme> indirectObjects = prep == NoPreposition ? new List<Lexeme>() :
+                    command.Skip(command.IndexOf(prepLex));
 
+                //if we have verb prep object, we switch
+                if (directObjects.Count() == 0 && indirectObjects.Count() > 0)
+                {
+                    directObjects = indirectObjects;
+                    indirectObjects = new List<Lexeme>();
+                }
+
+                Command commandObject = new Command(verb, prep) 
+                { DirectObjects = IdentifyNounPhrases(directObjects.ToList()),
+                  IndirectObjects = IdentifyNounPhrases(indirectObjects.ToList())
+                };
+                parsedCommands.Add(commandObject);
 			}
-			
-			
-			
-			
-			
-
-			/*
-				Verb verbObject = Verbs[verb];
-				if(!verbObject.Prepositions.Contains(preposition))
-				{
-					//todo: invalid preposition (e.g. put axe from house)
-					return null;
-				}
-				//so now we know our verb and preposition are valid (e.g. put axe on wall)
-				//now identify the actor - if we can't get one, we know it's the player (i.e. null)
-				//TODO: bother with this if we ever need it.
-
-				//now consider the direct objects and the indirect objects
-				List<List<string>> directObjects = IdentifyNouns(command, verbLocation, prepositionLocation);
-				List<List<string>> indirectObjects = IdentifyNouns(command, prepositionLocation, command.Count);
-				if (directObjects == null || indirectObjects == null)
-					return null; //TODO: non-matching noun, OR we read an adjective wrong..
-
-				//if the preposition follows the verb immediately, like 'look into box', then indirect objects are direct
-				if (prepositionLocation - verbLocation == 1)
-					directObjects = indirectObjects;
-
-				parsedCommands.Add(new Command());
-				
-			}
-			return parsedCommands;*/
-			return null;
+            return parsedCommands;
 		}
 
-		public List<List<Lexeme>> TokeniseInput(string input)
-		{
-			StringBuilder newInput = new StringBuilder();
-			List<string> words = new List<string>();
-			List<List<Lexeme>> output = new List<List<Lexeme>>();
+        public List<NounPhrase> IdentifyNounPhrases(List<Lexeme> objects)
+        {
+            //no nouns
+            if (objects.Count == 0)
+                return new List<NounPhrase>();
 
-			//first, split away the punctuation (,, ., etc)
-			foreach (char symbol in input)
-					newInput.Append(char.IsPunctuation(symbol) ? (" " + symbol + " ") : new string(new []{symbol}));
+            List<NounPhrase> phrases = new List<NounPhrase>();
 
-			words = newInput.ToString().Split(' ').Select(t => t.ToLower()).ToList();
+            //structure of a nounphrase: noun | adjective noun | article noun | article adjective noun | nounphrase conjunction nounphrase
+            //so split on conjunctions
+            List<List<Lexeme>> separatedObjectLexemes = new List<List<Lexeme>>();
+            List<Lexeme> currentObject = new List<Lexeme>();
+            foreach(Lexeme lex in objects)
+            {
+                if(lex.Type == PartOfSpeechType.Conjunction)
+                {
+                    separatedObjectLexemes.Add(currentObject);
+                    currentObject = new List<Lexeme>();
+                }
+                else
+                    currentObject.Add(lex);
+            }
+            separatedObjectLexemes.Add(currentObject);
 
-			List<List<string>> commands = SplitCommands(words);
+            foreach (List<Lexeme> objectPhrase in separatedObjectLexemes)
+            {
+                NounPhrase noun = new NounPhrase()
+                {
+                    Adjectives = objectPhrase.Where(l => l.Type == PartOfSpeechType.Adjective).Select(l => l.Value).ToList(),
+                    Noun = objectPhrase.First(l => l.Type == PartOfSpeechType.Noun || l.Type == PartOfSpeechType.Pronoun
+                        || l.Type == PartOfSpeechType.Actor).Value
+                };
+                Lexeme detLex = objectPhrase.FirstOrDefault(l => l.Type == PartOfSpeechType.Determiner);
+                //use 'a' for blank ones - e.g. throw brick becomes throw a brick
+                noun.Determiner = detLex == null ? "a" : detLex.Value;
+                noun.IsIndiscriminateDeterminer = IndiscriminateDeterminers.Contains(noun.Determiner);
+                phrases.Add(noun);
+            }
+            return phrases;
+        }
 
-			foreach (List<string> singleCommand in commands)
-			{
-				
-				while(Conjunctions.Contains(singleCommand.Last()) || singleCommand.Last() == "")
-					singleCommand.RemoveAt(singleCommand.Count - 1);
-				List<Lexeme> singleCommandOutput = new List<Lexeme>();
-				List<string> originalInput = new List<string>(singleCommand);
-
-				while (singleCommand.Count > 0)
-				{
-					List<string> consider = new List<string>(singleCommand);
-
-					while (consider.Count > 0)
-					{
-						string joinedConsider = String.Join(" ", consider).Trim();
-						//if it's a valid token, then add it to our output
-						if (IsVocabulary(joinedConsider))
-						{
-							singleCommandOutput.Add(new Lexeme(joinedConsider, GetPartOfSpeech(joinedConsider)));
-							singleCommand.RemoveRange(0, consider.Count);
-							break;
-						}
-						consider.RemoveAt(consider.Count - 1);
-					}
-
-					//if our string for consideration is empty, then it was invalid input
-					if (consider.Count == 0)
-					{
-						return null;
-					}
-				}
-				output.Add(singleCommandOutput);
-			}
-			return output;
-		}
-
-		public List<List<string>> IdentifyNouns(List<string> command, int verbLocation, int prepLocation)
-		{
-			//a noun can have the following form:
-			//noun. brick. bricks.
-			//article noun. a brick. 
-			//quantifier/ambiguous-determiner noun. the brick/bricks. some bricks. 3 bricks. all bricks.
-			//any of the above + adjectives noun. the red brick. some red bricks. 3 blue bricks. Cannot have anything between adjectives
-			//and the noun except more adjectives.
-			List<string> substr = command.Skip(verbLocation + 1).Take(prepLocation - verbLocation - 1).ToList();
-			if (substr.Count == 0)
-				return new List<List<string>>(); //does this ever happen? use on wall..
-			List<List<string>> nouns = new List<List<string>>();
-			List<string> currentNoun = new List<string>();
-			foreach(string word in substr)
-			{
-				if (Registry.Objects.ContainsKey(word))
-				{
-					currentNoun.Add(word);
-					nouns.Add(currentNoun);
-					currentNoun = new List<string>();
-				}
-				else if (Adjectives.Contains(word))
-					currentNoun.Add(word);
-				else
-					continue;
-			}
-
-			if(currentNoun.Count > 0)
-			{
-				//we have adjectives, but no matching noun..
-				return null;
-			}
-
-			return nouns;
-		}
-
-		public List<List<string>> SplitCommands(List<string> tokens)
+		public List<List<string>> SplitCommands(List<string> tokens, IEnumerable<string> breaks)
 		{
 			List<List<string>> chunkList = new List<List<string>>();
 			List<string> currentChunk = new List<string>();
 			foreach(string tok in tokens)
 			{
-				if (CommandBreaks.Contains(tok))
+				if (breaks.Contains(tok))
 				{
 					chunkList.Add(currentChunk);
 					currentChunk = new List<string>();
@@ -277,7 +269,6 @@ namespace PancakeWaffles.Parsing
 			chunkList.Add(currentChunk);
 			return chunkList.Where(l => l.Count > 0).ToList();
 		}
-
 
 		public bool IsVocabulary(string word)
 		{

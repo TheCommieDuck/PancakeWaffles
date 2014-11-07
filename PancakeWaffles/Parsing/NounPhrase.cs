@@ -12,5 +12,9 @@ namespace PancakeWaffles.Parsing
 		public List<string> Adjectives { get; set; }
 
 		public string Noun { get; set; }
+
+        public bool IsIndiscriminateDeterminer { get; set; }
+
+        public string Determiner { get; set; }
 	}
 }
