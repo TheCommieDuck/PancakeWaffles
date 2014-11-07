@@ -42,7 +42,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Parsing\Command.cs" />
+    <Compile Include="Parsing\Lexeme.cs" />
     <Compile Include="Parsing\NounPhrase.cs" />
+    <Compile Include="Parsing\PartOfSpeechType.cs" />
     <Compile Include="Verbs\Verb.cs" />
     <Compile Include="Object.cs" />
     <Compile Include="Registry.cs" />

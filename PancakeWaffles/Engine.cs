@@ -36,6 +36,8 @@ namespace PancakeWaffles
 				null, new[]{"throw"}, new[]{"at", "under", "over"}, true);
 
 			Thing door = new Thing("door", "it's a door.");
+			Thing sandwich = new Thing("chicken sandwich", null);
+			Thing chicken = new Thing("chicken", null);
 			Registry.StartLocation = lab;
 
 			Engine engine = new Engine();

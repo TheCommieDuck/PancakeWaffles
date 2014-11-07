@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using PancakeWaffles.Verbs;
 using PancakeWaffles.Things;
+using System.Text.RegularExpressions;
 
 namespace PancakeWaffles.Parsing
 {
@@ -43,10 +44,49 @@ namespace PancakeWaffles.Parsing
 
 		private static HashSet<string> adjectives = new HashSet<string>();
 
+		private static HashSet<string> commandPatterns = new HashSet<string>();
+
 		public static void RegisterVerb(Verb command)
 		{
 			command.Synonyms.ForEach(s => Verbs.Add(s, command));
 			command.Prepositions.ForEach(p => Prepositions.Add(p));
+		}
+
+		public static void RegisterCommandPattern(string regex)
+		{
+			commandPatterns.Add(regex);
+		}
+		
+		public PartOfSpeechType GetPartOfSpeech(string part)
+		{
+			if (Verbs.Keys.Contains(part))
+				return PartOfSpeechType.Verb;
+			if (Prepositions.Contains(part))
+				return PartOfSpeechType.Preposition;
+			if (Adjectives.Contains(part))
+				return PartOfSpeechType.Adjective;
+			if (Pronouns.Contains(part))
+				return PartOfSpeechType.Pronoun;
+			if (Conjunctions.Contains(part))
+				return PartOfSpeechType.Conjunction;
+			if (Determiners.Contains(part) || IndiscriminateDeterminers.Contains(part))
+				return PartOfSpeechType.Determiner;
+			if (Registry.Objects.Keys.Contains(part))
+				return PartOfSpeechType.Noun;
+			else
+				return PartOfSpeechType.Error;
+		}
+
+		public Parser()
+		{
+			string actor = "(Actor )?";
+			string verb = "(Verb)";
+			string prep = "( Preposition)?";
+			string innerNoun = "(?<innerNounPhrase>(Determiner )?((Adjective )*(Pronoun|Actor|Noun)))";
+			string nounPhrase = "( (?<nounPhrase>"+innerNoun+"( Preposition "+innerNoun+")))?";
+			string conjuction = "( Conjunction \\k<nounPhrase>)*";
+
+			commandPatterns.Add(actor+verb+prep+nounPhrase+conjuction);
 		}
 
 		public List<Command> Parse(string input)
@@ -54,8 +94,37 @@ namespace PancakeWaffles.Parsing
 			//first, lowercase all words and split out punctuation
 			List<Command> parsedCommands = new List<Command>();
 
-			List<string> tokens = TokeniseInput(input);
-			if(tokens == null)
+			List<List<Lexeme>> tokens = TokeniseInput(input);
+			if (tokens == null)
+			{
+				Console.WriteLine("Invalid Input");
+				return null;
+			}
+			else
+			{
+				tokens.ForEach(c => Console.WriteLine(c));
+			}
+
+			Regex regex = new Regex(commandPatterns.Aggregate("^", (built, pattern) => String.Join("|", built+"$", "^"+pattern), v => v+"$"));
+			foreach(List<Lexeme> command in tokens)
+			{
+				//match lexemes with pattern matching
+				string builtCommand = command.Aggregate("", (built, lex) => built + lex.Type.ToString() + " ").Trim();
+				Match match = regex.Match(builtCommand);
+				if(!match.Success)
+				{
+					Console.WriteLine("Invalid regex");
+					//we didn't recognise that structure..
+					return null;
+				}
+			}
+			
+			//plan for parsing - register a list of rules (e.g. verb, verb object)
+			
+			//don't care if they don't match up entirely - e.g. allow throw tasty yellow brick for bob
+			//then have a sanity check afterwards to see whether it's random words put together
+
+			/*if(tokens == null)
 			{
 				return null;
 			}
@@ -119,54 +188,58 @@ namespace PancakeWaffles.Parsing
 				parsedCommands.Add(new Command());
 				
 			}
-			return parsedCommands;
+			return parsedCommands;*/
+			return null;
 		}
 
-		public List<string> TokeniseInput(string input)
+		public List<List<Lexeme>> TokeniseInput(string input)
 		{
 			StringBuilder newInput = new StringBuilder();
-			List<string> tokens = new List<string>();
-			List<string> output = new List<string>();
+			List<string> words = new List<string>();
+			List<List<Lexeme>> output = new List<List<Lexeme>>();
 
 			//first, split away the punctuation (,, ., etc)
 			foreach (char symbol in input)
+					newInput.Append(char.IsPunctuation(symbol) ? (" " + symbol + " ") : new string(new []{symbol}));
+
+			words = newInput.ToString().Split(' ').Select(t => t.ToLower()).ToList();
+
+			List<List<string>> commands = SplitCommands(words);
+
+			foreach (List<string> singleCommand in commands)
 			{
-				if (char.IsPunctuation(symbol))
-					newInput.Append(" " + symbol + " ");
-				else
-					newInput.Append(symbol);
-			}
+				
+				while(Conjunctions.Contains(singleCommand.Last()) || singleCommand.Last() == "")
+					singleCommand.RemoveAt(singleCommand.Count - 1);
+				List<Lexeme> singleCommandOutput = new List<Lexeme>();
+				List<string> originalInput = new List<string>(singleCommand);
 
-
-			tokens = newInput.ToString().Split(' ').Select(t => t.ToLower()).ToList();
-			List<string> originalInput = new List<string>(tokens);
-
-			//while we have tokens to consider, consider a string of every token. check if it's a valid word; if it is, then remove those tokens
-			//and check if the remaining words form token(s). otherwise, remove the last word and try again.
-			//if at any point we have no tokens left in our consideration string, then it's not a valid configuration and we throw an error.
-			while(tokens.Count > 0)
-			{
-				List<string> consider = new List<string>(tokens);
-				while (consider.Count > 0)
+				while (singleCommand.Count > 0)
 				{
-					//if it's a valid token, then add it to our output
-					if (IsVocabulary(String.Join(String.Empty, consider)))
+					List<string> consider = new List<string>(singleCommand);
+
+					while (consider.Count > 0)
 					{
-						output.Add(String.Join(String.Empty, consider));
-						tokens.RemoveRange(0, consider.Count);
-						break;
+						string joinedConsider = String.Join(" ", consider).Trim();
+						//if it's a valid token, then add it to our output
+						if (IsVocabulary(joinedConsider))
+						{
+							singleCommandOutput.Add(new Lexeme(joinedConsider, GetPartOfSpeech(joinedConsider)));
+							singleCommand.RemoveRange(0, consider.Count);
+							break;
+						}
+						consider.RemoveAt(consider.Count - 1);
 					}
-					consider.RemoveAt(consider.Count - 1);
-				}
 
-				//if our string for consideration is empty, then it was totaly invalid
-				if(consider.Count == 0)
-				{
-					return null;
+					//if our string for consideration is empty, then it was invalid input
+					if (consider.Count == 0)
+					{
+						return null;
+					}
 				}
+				output.Add(singleCommandOutput);
 			}
-
-			return tokens;
+			return output;
 		}
 
 		public List<List<string>> IdentifyNouns(List<string> command, int verbLocation, int prepLocation)
@@ -223,26 +296,13 @@ namespace PancakeWaffles.Parsing
 			return chunkList.Where(l => l.Count > 0).ToList();
 		}
 
+
 		public bool IsVocabulary(string word)
 		{
 			return (Registry.Objects.ContainsKey(word) || Adjectives.Contains(word) || Prepositions.Contains(word)
 						|| Conjunctions.Contains(word) || Pronouns.Contains(word) || Verbs.ContainsKey(word) ||
 						Determiners.Contains(word) || IndiscriminateDeterminers.Contains(word));
 		}
-
-		/*public List<string> GetFullyExpressedCommand(string input)
-		{
-			foreach(string tok in input.Split(' '))
-			{
-				string token = tok.ToLower();
-				//todo: if the word is invalid and we don't recognise it, give up
-				if(Pronouns.Contains(token))
-				{
-					//for the current room, consider 
-				}
-			}
-			return null;
-		}*/
 
 		public void PerformUnknownCommand(string input)
 		{
