@@ -9,8 +9,6 @@ namespace PancakeWaffles
 	class Object
 	{
 		#region Properties
-		
-		
 
 		public string Name { get; protected set; }
 

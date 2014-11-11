@@ -16,5 +16,10 @@ namespace PancakeWaffles.Parsing
         public bool IsIndiscriminateDeterminer { get; set; }
 
         public string Determiner { get; set; }
+
+		public override string ToString()
+		{
+			return (!IsIndiscriminateDeterminer ? Determiner : "") + string.Join(" ", Adjectives) + " " + Noun;
+		}
 	}
 }

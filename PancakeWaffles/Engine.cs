@@ -1,18 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using PancakeWaffles.Parsing;
+﻿using PancakeWaffles.Parsing;
 using PancakeWaffles.Rooms;
 using PancakeWaffles.Things;
 using PancakeWaffles.Verbs;
+using System.Collections.Generic;
 
 namespace PancakeWaffles
 {
 	class Engine
 	{
 		public static Region DefaultRegion { get; set; }
+
+		private Queue<CommandPhrase> currentCommands;
 
 		static void Main(string[] args)
 		{
@@ -48,6 +46,9 @@ namespace PancakeWaffles
 
 		public void Start()
 		{
+			//note this contains parsed commands that may or may not actually work. They get checked on the fly.
+			currentCommands = new Queue<CommandPhrase>();
+
 			Player player = new Player();
 			Parser parser = new Parser();
 			player.Location = Registry.StartLocation;
@@ -55,8 +56,38 @@ namespace PancakeWaffles
 			{
 				Terminal.Write(">");
 				string input = Terminal.Read();
-				parser.Parse(input);
+				List<CommandPhrase> commandPhrases = parser.Parse(input);
+
+				if(commandPhrases == null)
+				{
+					//do something about invalid input
+					continue;
+				}
+
+				commandPhrases.ForEach(c => currentCommands.Enqueue(c));
+
+				//now pump messages into the actual game loop
+				while(commandPhrases.Count > 0)
+				{
+					CommandPhrase currentCommand = currentCommands.Dequeue();
+					//if the current command is a meta-command, don't run through a turn.
+					//though meta commands must not have objects, so.
+					if(currentCommand.Verb.IsMetaCommand)
+					{
+						//do something..
+					}
+					else
+					{
+
+						RunGameTurn();
+					}
+				}
 			}
+		}
+
+		public void RunGameTurn()
+		{
+
 		}
 	}
 }

@@ -9,7 +9,7 @@ namespace PancakeWaffles.Parsing
 {
 	class Parser
 	{
-		public static Dictionary<string, Verb> Verbs
+		public static Dictionary<string, List<Verb>> Verbs
 		{
 			get { return commands; }
 		}
@@ -36,7 +36,7 @@ namespace PancakeWaffles.Parsing
 
 		public const string NoPreposition = "no_preposition";
 
-		private static Dictionary<string, Verb> commands = new Dictionary<string, Verb>();
+		private static Dictionary<string, List<Verb>> commands = new Dictionary<string, List<Verb>>();
 
 		private static HashSet<string> prepositions = new HashSet<string>(){ NoPreposition };
 
@@ -46,7 +46,13 @@ namespace PancakeWaffles.Parsing
 
 		public static void RegisterVerb(Verb command)
 		{
-			command.Synonyms.ForEach(s => Verbs.Add(s, command));
+			command.Synonyms.ForEach(s => 
+			{
+				if (Verbs.ContainsKey(s))
+					Verbs[s].Add(command);
+				else
+					Verbs.Add(s, new List<Verb>() { command });
+			});
 			command.Prepositions.ForEach(p => Prepositions.Add(p));
 		}
 
@@ -74,7 +80,6 @@ namespace PancakeWaffles.Parsing
 			else
 				return PartOfSpeechType.Error;
 		}
-
 
         public List<List<Lexeme>> TokeniseInput(string input)
         {
@@ -140,10 +145,10 @@ namespace PancakeWaffles.Parsing
 			commandPatterns.Add(actor+verb+prep+nounPhrase+conjuction);
 		}
 
-		public List<Command> Parse(string input)
+		public List<CommandPhrase> Parse(string input)
 		{
 			//first, lowercase all words and split out punctuation
-			List<Command> parsedCommands = new List<Command>();
+			List<CommandPhrase> parsedCommands = new List<CommandPhrase>();
 
 			List<List<Lexeme>> tokens = TokeniseInput(input);
 			if (tokens == null)
@@ -158,7 +163,20 @@ namespace PancakeWaffles.Parsing
 			{
 				//match lexemes with pattern matching
 				string builtCommand = command.Aggregate("", (built, lex) => built + lex.Type.ToString() + " ").Trim();
-				//don't care if they don't match up entirely - e.g. allow throw tasty yellow brick for bob
+				
+				//find the first verb (since, e.g. tell bob to eat a pie will have 2 verbs)
+				Lexeme verbLex = command.FirstOrDefault(l => l.Type == PartOfSpeechType.Verb);
+				if(verbLex == null)
+				{
+					//TODO SOME ERROR ABOUT NO VERB
+				}
+				List<Verb> matchingVerbs = Verbs[verbLex.Value];
+				
+				//iterate all verb forms we could possibly have
+
+
+
+				/*//don't care if they don't match up entirely - e.g. allow throw tasty yellow brick for bob
 				Match match = regex.Match(builtCommand);
 				if(!match.Success)
 				{
@@ -202,11 +220,11 @@ namespace PancakeWaffles.Parsing
                     indirectObjects = new List<Lexeme>();
                 }
 
-                Command commandObject = new Command(verb, prep) 
+                CommandPhrase commandObject = new CommandPhrase(verb, prep) 
                 { DirectObjects = IdentifyNounPhrases(directObjects.ToList()),
                   IndirectObjects = IdentifyNounPhrases(indirectObjects.ToList())
                 };
-                parsedCommands.Add(commandObject);
+                parsedCommands.Add(commandObject);*/
 			}
             return parsedCommands;
 		}
